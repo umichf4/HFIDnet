@@ -2,7 +2,7 @@
 # @Author: Brandon Han
 # @Date:   2019-08-17 15:20:26
 # @Last Modified by:   Brandon Han
-# @Last Modified time: 2019-09-14 15:05:08
+# @Last Modified time: 2019-09-14 20:34:02
 
 import torch
 import torch.nn as nn
@@ -44,32 +44,28 @@ def train_generator(params):
     }
 
     # Data configuration
-    if not (os.path.exists('data/all_ctrast.npy') and os.path.exists('data/all_gap.npy') and
+    if not (os.path.exists('data/all_ctrast.npy') and os.path.exists('data/all_gatk.npy') and
             os.path.exists('data/all_shape.npy') and os.path.exists('data/all_spec.npy')):
         data_pre_arbitrary(params.T_path)
 
-    all_gap = torch.from_numpy(np.load('data/all_gap.npy')).float()
+    all_gatk = torch.from_numpy(np.load('data/all_gatk.npy')).float()
     all_spec = torch.from_numpy(np.load('data/all_spec.npy')).float()
     all_shape = torch.from_numpy(np.load('data/all_shape.npy')).float()
     all_ctrast = torch.from_numpy(np.load('data/all_ctrast.npy')).float()
-    # all_gauss = torch.from_numpy(np.load('data/all_gauss.npy')).float()
 
     all_num = all_gap.shape[0]
     permutation = np.random.permutation(all_num).tolist()
-    all_gap, all_spec, all_shape, all_ctrast = all_gap[permutation], \
+    all_gatk, all_spec, all_shape, all_ctrast = all_gatk[permutation],\
         all_spec[permutation, :], all_shape[permutation, :, :, :], all_ctrast[permutation, :]
 
-    # train_gap = all_gap[:int(all_num * params.ratio)]
-    # valid_gap = all_gap[int(all_num * params.ratio):]
+    # train_gatk = all_gap[:int(all_num * params.ratio), :]
+    # valid_gatk = all_gap[int(all_num * params.ratio):, :]
 
     train_spec = all_spec[:int(all_num * params.ratio), :]
     valid_spec = all_spec[int(all_num * params.ratio):, :]
 
     train_ctrast = all_ctrast[:int(all_num * params.ratio), :]
     valid_ctrast = all_ctrast[int(all_num * params.ratio):, :]
-
-    # train_gauss = all_gauss[:int(all_num * params.ratio), :]
-    # valid_gauss = all_gauss[int(all_num * params.ratio):, :]
 
     train_shape = all_shape[:int(all_num * params.ratio), :, :, :]
     valid_shape = all_shape[int(all_num * params.ratio):, :, :, :]
@@ -110,7 +106,6 @@ def train_generator(params):
     for k in range(params.epochs):
         epoch = k + 1
         epoch_list.append(epoch)
-        # params.alpha = params.alpha * pow(0.5, epoch // 200)
 
         # Train
         net.train()
@@ -123,11 +118,11 @@ def train_generator(params):
             optimizer.zero_grad()
             net.zero_grad()
 
-            output_shapes, output_gaps = net(noise, ctrasts)
+            output_shapes, output_pairs = net(noise, ctrasts)
             binary_loss = criterion_3(output_shapes)
             shape_loss = 1 - criterion_2(output_shapes, labels)
             # output_shapes = binary(output_shapes)
-            output_specs = simulator(output_shapes, output_gaps)
+            output_specs = simulator(output_shapes, output_pairs[:, 0], output_pairs[:, 1])
             spec_loss = criterion_1(output_specs, inputs)
 
             train_loss = spec_loss + shape_loss * params.alpha + binary_loss * params.beta
@@ -139,41 +134,39 @@ def train_generator(params):
         # Validation
         net.eval()
         val_loss = 0
-        # with torch.no_grad():
-        #     for i, data in enumerate(valid_loader):
-        #         inputs, labels, ctrasts = data
-        #         inputs, labels, ctrasts = inputs.to(device), labels.to(device), ctrasts.to(device)
-        #         noise = torch.rand(inputs.shape[0], params.noise_dim)
-
-        #         output_shapes, output_gaps = net(noise, ctrasts)
-        #         binary_loss = criterion_3(output_shapes)
-        #         shape_loss = 1 - criterion_2(output_shapes, labels)
-        #         # output_shapes = binary(output_shapes)
-        #         output_specs = simulator(output_shapes, output_gaps)
-        #         spec_loss = criterion_1(output_specs, inputs)
-        #         val_loss += spec_loss + shape_loss * params.alpha + binary_loss * params.beta
-
-        # val_loss /= (i + 1)
-        val_loss_list.append(val_loss)
         with torch.no_grad():
-            desire = [1, 1, 0.4, 0.1, 0.4, 1, 1, 1, 1, 0.4, 0.1, 0.4, 1, 1]
-            ctrast = np.array(desire)
-            spec = torch.from_numpy(ctrast).float().view(1, -1)
-            noise = torch.rand(1, params.noise_dim)
-            spec, noise = spec.to(device), noise.to(device)
-            output_shapes, output_gaps = net(noise, spec)
+            for i, data in enumerate(valid_loader):
+                inputs, labels, ctrasts = data
+                inputs, labels, ctrasts = inputs.to(device), labels.to(device), ctrasts.to(device)
+                noise = torch.rand(inputs.shape[0], params.noise_dim)
 
-        # Save figures
-        out_img = output_shapes[0, :, :].view(64, 64).detach().cpu().numpy()
-        out_gap = int(np.rint(output_gaps[0, :].view(-1).detach().cpu().numpy() * 200 + 200))
-        shape_pred = MetaShape(out_gap)
-        shape_pred.img = np.uint8(out_img * 255)
-        shape_pred.save_polygon("results/" + str(epoch) + ".png")
+                output_shapes, output_pairs = net(noise, ctrasts)
+                binary_loss = criterion_3(output_shapes)
+                shape_loss = 1 - criterion_2(output_shapes, labels)
+                # output_shapes = binary(output_shapes)
+                output_specs = simulator(output_shapes, output_pairs)
+                spec_loss = criterion_1(output_specs, inputs)
+                val_loss += spec_loss + shape_loss * params.alpha + binary_loss * params.beta
+
+        val_loss /= (i + 1)
+        # val_loss_list.append(val_loss)
+        # with torch.no_grad():
+        #     desire = [1, 1, 0.4, 0.1, 0.4, 1, 1, 1, 1, 0.4, 0.1, 0.4, 1, 1]
+        #     ctrast = np.array(desire)
+        #     spec = torch.from_numpy(ctrast).float().view(1, -1)
+        #     noise = torch.rand(1, params.noise_dim)
+        #     spec, noise = spec.to(device), noise.to(device)
+        #     output_shapes, output_gaps = net(noise, spec)
+
+        # # Save figures
+        # out_img = output_shapes[0, :, :].view(64, 64).detach().cpu().numpy()
+        # out_gap = int(np.rint(output_gaps[0, :].view(-1).detach().cpu().numpy() * 200 + 200))
+        # shape_pred = MetaShape(out_gap)
+        # shape_pred.img = np.uint8(out_img * 255)
+        # shape_pred.save_polygon("results/" + str(epoch) + ".png")
 
         print('Epoch=%d train_loss: %.7f val_loss: %.7f spec_loss: %.7f shape_loss: %.7f binary_loss: %.7f lr: %.7f' %
               (epoch, train_loss, val_loss, spec_loss, shape_loss, binary_loss, scheduler.get_lr()[0]))
-        # print('Epoch=%d train_loss: %.7f val_loss: %.7f lr: %.7f' %
-        #       (epoch, train_loss, val_loss, scheduler.get_lr()[0]))
 
         scheduler.step()
 
@@ -283,37 +276,36 @@ def train_simulator(params):
     }
 
     # Data configuration
-    if not (os.path.exists('data/all_gap.npy') and os.path.exists('data/all_shape.npy') and os.path.exists('data/all_spec.npy')):
+    if not (os.path.exists('data/all_ctrast.npy') and os.path.exists('data/all_gatk.npy') and
+            os.path.exists('data/all_shape.npy') and os.path.exists('data/all_spec.npy')):
         data_pre_arbitrary(params.T_path)
 
-    if not (os.path.exists('data/all_gap_en.npy') and os.path.exists('data/all_shape_en.npy') and os.path.exists('data/all_spec_en.npy')):
+    if not (os.path.exists('data/all_gatk_en.npy') and os.path.exists('data/all_shape_en.npy') and os.path.exists('data/all_spec_en.npy')):
         data_enhancement()
 
-    all_gap = torch.from_numpy(np.load('data/all_gap_en.npy')).float()
+    all_gatk = torch.from_numpy(np.load('data/all_gatk_en.npy')).float()
     all_spec = torch.from_numpy(np.load('data/all_spec_en.npy')).float()
     all_shape = torch.from_numpy(np.load('data/all_shape_en.npy')).float()
-    # all_gauss = torch.from_numpy(np.load('data/all_gauss.npy')).float()
+    all_ctrast = torch.from_numpy(np.load('data/all_ctrast_en.npy')).float()
 
     all_num = all_gap.shape[0]
     permutation = np.random.permutation(all_num).tolist()
-    all_gap, all_spec, all_shape = all_gap[permutation], all_spec[permutation, :], all_shape[permutation, :, :, :]
+    all_gatk, all_spec, all_shape, all_ctrast = all_gatk[permutation],\
+        all_spec[permutation, :], all_shape[permutation, :, :, :], all_ctrast[permutation, :]
 
-    train_gap = all_gap[:int(all_num * params.ratio)]
-    valid_gap = all_gap[int(all_num * params.ratio):]
+    train_gatk = all_gap[:int(all_num * params.ratio), :]
+    valid_gatk = all_gap[int(all_num * params.ratio):, :]
 
     train_spec = all_spec[:int(all_num * params.ratio), :]
     valid_spec = all_spec[int(all_num * params.ratio):, :]
 
-    # train_gauss = all_gauss[:int(all_num * params.ratio), :]
-    # valid_gauss = all_gauss[int(all_num * params.ratio):, :]
-
     train_shape = all_shape[:int(all_num * params.ratio), :, :, :]
     valid_shape = all_shape[int(all_num * params.ratio):, :, :, :]
 
-    train_dataset = TensorDataset(train_spec, train_shape, train_gap)
+    train_dataset = TensorDataset(train_spec, train_shape, train_gatk)
     train_loader = DataLoader(dataset=train_dataset, batch_size=params.batch_size_s, shuffle=True)
 
-    valid_dataset = TensorDataset(valid_spec, valid_shape, valid_gap)
+    valid_dataset = TensorDataset(valid_spec, valid_shape, valid_gatk)
     valid_loader = DataLoader(dataset=valid_dataset, batch_size=valid_gap.shape[0], shuffle=True)
 
     # Net configuration
@@ -340,13 +332,13 @@ def train_simulator(params):
         net.train()
         for i, data in enumerate(train_loader):
 
-            specs, shapes, gaps = data
-            specs, shapes, gaps = specs.to(device), shapes.to(device), gaps.to(device)
+            specs, shapes, pairs = data
+            specs, shapes, pairs = specs.to(device), shapes.to(device), pairs.to(device)
 
             optimizer.zero_grad()
             net.zero_grad()
 
-            outputs = net(shapes, gaps)
+            outputs = net(shapes, pairs[:, 0], pairs[:, 1])
             train_loss = criterion(outputs, specs)
             train_loss.backward()
             optimizer.step()
@@ -358,10 +350,13 @@ def train_simulator(params):
         val_loss = 0
         with torch.no_grad():
             for i, data in enumerate(valid_loader):
-                specs, shapes, gaps = data
-                specs, shapes, gaps = specs.to(device), shapes.to(device), gaps.to(device)
+                specs, shapes, pairs = data
+                specs, shapes, pairs = specs.to(device), shapes.to(device), pairs.to(device)
 
-                outputs = net(shapes, gaps)
+                optimizer.zero_grad()
+                net.zero_grad()
+
+                outputs = net(shapes, pairs[:, 0], pairs[:, 1])
                 val_loss += criterion(outputs, specs)
         val_loss /= (i + 1)
         val_loss_list.append(val_loss)

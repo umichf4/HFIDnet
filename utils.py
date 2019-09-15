@@ -2,7 +2,7 @@
 # @Author: Brandon Han
 # @Date:   2019-08-17 15:20:26
 # @Last Modified by:   Brandon Han
-# @Last Modified time: 2019-09-14 14:48:37
+# @Last Modified time: 2019-09-14 20:45:05
 import torch
 import os
 import json
@@ -21,27 +21,6 @@ warnings.filterwarnings('ignore')
 
 current_dir = os.path.abspath(os.path.dirname(__file__))
 Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
-
-
-class Binaryloss(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        x = torch.mean(x) / x.shape[0]
-
-        return x
-
-
-class BiBinaryloss(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        right = x[:, 0, :, :].masked_fill((x[:, 0, :, :] < 0.5), 1)
-        left = x[:, 0, :, :].masked_fill((x[:, 0, :, :] >= 0.5), 0)
-        res = torch.mean(1 - right + left)
-        return res
 
 
 class Params():
@@ -249,47 +228,6 @@ def rename_all_files(path):
         count += 1
 
 
-def rect2polar(real, imag):
-    complex_number = complex(real, imag)
-    return abs(complex_number), cmath.phase(complex_number)
-
-
-def polar2rect(modu, phase):
-    complex_number = cmath.rect(modu, phase)
-    return complex_number.real, complex_number.imag
-
-
-def rect2polar_parallel(real_que, imag_que):
-    assert len(real_que) == len(imag_que), "Size mismatch"
-    modu_que, phase_que = np.zeros(len(real_que)), np.zeros(len(real_que))
-    for i, real, imag in zip(range(len(real_que)), real_que, imag_que):
-        modu_que[i], phase_que[i] = rect2polar(real, imag)
-    return modu_que, phase_que
-
-
-def polar2rect_parallel(modu_que, phase_que):
-    assert len(modu_que) == len(phase_que), "Size mismatch"
-    real_que, imag_que = np.zeros(len(modu_que)), np.zeros(len(modu_que))
-    for i, modu, phase in zip(range(len(modu_que)), modu_que, phase_que):
-        real_que[i], imag_que[i] = polar2rect(modu, phase)
-    return real_que, imag_que
-
-
-def find_spectrum(thickness, radius, gap, TT_array):
-    rows, _ = TT_array.shape
-    wavelength, spectrum = [], []
-    for row in range(rows):
-        if TT_array[row, 1] == thickness and TT_array[row, 2] == radius and TT_array[row, 3] == gap:
-            wavelength.append(TT_array[row, 0])
-            spectrum.append(TT_array[row, -1])
-        else:
-            continue
-    wavelength = np.array(wavelength)
-    spectrum = np.array(spectrum)
-    index_order = np.argsort(wavelength)
-    return wavelength[index_order], spectrum[index_order]
-
-
 def load_mat(path):
     variables = scio.whosmat(path)
     target = variables[0][0]
@@ -299,86 +237,7 @@ def load_mat(path):
     return TT_list, TT_array
 
 
-def data_pre(list_all, wlimit):
-    dtype = [('wave_length', int), ('thickness', int), ('radius', int), ('gap', int), ('efficiency', float)]
-    values = [tuple(single_device) for single_device in list_all]
-    array_temp = np.array(values, dtype)
-    array_all = np.sort(array_temp, order=['thickness', 'radius', 'gap', 'wave_length'])
-
-    thickness_list = np.unique(array_all['thickness'])
-    radius_list = np.unique(array_all['radius'])
-    gap_list = np.unique(array_all['gap'])
-    reformed = []
-
-    for thickness in thickness_list:
-        for radius in radius_list:
-            for gap in gap_list:
-                pick_index = np.intersect1d(np.argwhere(array_all['radius'] == radius), np.argwhere(
-                    array_all['thickness'] == thickness))
-                pick_index = np.intersect1d(pick_index, np.argwhere(array_all['gap'] == gap))
-                picked = array_all[pick_index]
-                picked = np.sort(picked, order=['wave_length'])
-                cur_ref = [thickness, radius, gap]
-                for picked_single in picked:
-                    cur_ref.append(picked_single[4])
-
-                reformed.append(cur_ref)
-
-    return np.array(reformed), array_all
-
-
-def inter(inputs, device):
-    inputs_inter = torch.ones(inputs.shape[0], inputs.shape[1], 224)
-    x = np.linspace(0, 223, num=inputs.shape[2])
-    new_x = np.linspace(0, 223, num=224)
-
-    for index_j, j in enumerate(inputs):
-        for index_jj, jj in enumerate(j):
-            y = jj
-            f = interpolate.interp1d(x, y, kind='cubic')
-            jj = f(new_x)
-            inputs_inter[index_j, index_jj, :] = torch.from_numpy(jj)
-
-    inputs_inter = inputs_inter.double().to(device)
-
-    return inputs_inter
-
-
-def RCWA_parallel(eng, w_list, thick_list, r_list, gap, acc=5):
-    import matlab.engine
-    batch_size = len(thick_list)
-    spec = np.ones((batch_size, len(w_list)))
-    gap = matlab.double([gap])
-    acc = matlab.double([acc])
-    for i in range(batch_size):
-        thick = thick_list[i]
-        thick = matlab.double([thick])
-        r = r_list[i]
-        r = matlab.double([r])
-        for index, w in enumerate(w_list):
-            w = matlab.double([w])
-            spec[i, index] = eng.RCWA_solver(w, gap, thick, r, acc)
-
-    return spec
-
-
-def RCWA(eng, w_list, thick, r, gap, acc=5, medium=1, shape=0):
-    import matlab.engine
-    spec = np.ones(len(w_list))
-    gap = matlab.double([gap])
-    acc = matlab.double([acc])
-    thick = matlab.double([thick])
-    r = matlab.double([r])
-    medium = matlab.double([medium])
-    shape = matlab.double([shape])
-    for index, w in enumerate(w_list):
-        w = matlab.double([w])
-        spec[index] = eng.RCWA_solver(w, gap, thick, r, acc, medium, shape)
-
-    return spec
-
-
-def RCWA_arbitrary(eng, gap, img_path, thickness=500, acc=5):
+def RCWA_arbitrary(eng, gap, img_path, thickness, acc=5):
     import matlab.engine
     gap = matlab.double([gap])
     acc = matlab.double([acc])
@@ -400,76 +259,6 @@ def keep_range(data, low=0, high=1):
     data[index] = low
 
     return data
-
-
-def gauss_spec_valley(f, mean, var, depth=0.2):
-    return 1 - (1 - depth) * np.exp(-(f - mean) ** 2 / (2 * (var ** 2)))
-
-
-def gauss_spec_peak(f, mean, var, depth=0.2):
-    return (1 - depth) * np.exp(-(f - mean) ** 2 / (2 * (var ** 2)))
-
-
-def random_gauss_spec(f):
-    depth = np.random.uniform(low=0.0, high=0.05)
-    mean = np.random.uniform(low=400, high=600)
-    var = np.random.uniform(low=20, high=40)
-    return 1 - (1 - depth) * np.exp(-(f - mean) ** 2 / (2 * (var ** 2)))
-
-
-def random_step_spec(f):
-    depth = np.random.uniform(low=0.0, high=0.2)
-    duty_ratio = np.random.uniform(low=0.1, high=0.3)
-    width = int(len(f) * duty_ratio / 2)
-    valley = np.random.randint(low=len(f) / 3, high=2 * len(f) / 3, dtype=int)
-    spec = np.random.uniform(low=0.7, high=1, size=len(f))
-    spec[valley - width:valley + width] = depth
-    return spec
-
-
-def random_gauss_spec_combo(f, valley_num):
-    spec = np.zeros(len(f))
-    for i in range(valley_num):
-        spec += random_gauss_spec(f)
-    return normalization(spec)
-
-
-def spec_jitter(spec, amp):
-    return normalization(spec + np.random.uniform(low=-amp, high=amp, size=spec.size))
-
-
-def gauss10(x, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9):
-
-    return a0 * np.exp(-((x - m0) / s0)**2) + a1 * np.exp(-((x - m1) / s1)**2) + a2 * np.exp(-((x - m2) / s2)**2) + \
-        a3 * np.exp(-((x - m3) / s3)**2) + a4 * np.exp(-((x - m4) / s4)**2) + a5 * np.exp(-((x - m5) / s5)**2) + \
-        a6 * np.exp(-((x - m6) / s6)**2) + a7 * np.exp(-((x - m7) / s7)**2) + a8 * np.exp(-((x - m8) / s8)**2) + \
-        a9 * np.exp(-((x - m9) / s9)**2)
-
-
-def gauss10_tensor(in_tensor):
-    wave_tensor = torch.range(400, 680, 10)
-
-    def gauss_tensor(wave_tensor, a, m, s):
-        return a * torch.exp(-torch.pow((wave_tensor - m) / s, 2))
-
-    out_tensor = torch.zeros_like(wave_tensor)
-    for i in range(10):
-        out_tensor += gauss_tensor(wave_tensor, in_tensor[i], in_tensor[i + 10], in_tensor[i + 20])
-    return out_tensor
-
-
-def gauss10_curve_fit(spec):
-    a_min = [0] * 10
-    a_max = [1] * 10
-    m_min = [400] * 10
-    m_max = [680] * 10
-    s_min = [0] * 10
-    s_max = [1000] * 10
-    min_limit = a_min + m_min + s_min
-    max_limit = a_max + m_max + s_max
-    wavelength = np.linspace(400, 680, 29)
-    popt, _ = curve_fit(gauss10, wavelength, spec, bounds=(min_limit, max_limit))
-    return popt
 
 
 def cal_contrast(wavelength, spec, spec_start, spec_end):
@@ -517,8 +306,8 @@ def data_pre_arbitrary(T_path):
     all_num = TT_array.shape[0]
     all_name_np = TT_array[:, 0]
     all_gap_np = (TT_array[:, 1] - 200) / 200
-    all_spec_np = TT_array[:, 2:]
-    # all_gauss_np = np.zeros((all_num, 60))
+    all_thk_np = (TT_array[:, 2] - 200) / 250
+    all_spec_np = TT_array[:, 3:]
     all_shape_np = np.zeros((all_num, 1, 64, 64))
     all_ctrast_np = np.zeros((all_num, 14))
     with tqdm(total=all_num, ncols=70) as t:
@@ -529,7 +318,7 @@ def data_pre_arbitrary(T_path):
             name = str(int(all_name_np[i]))
             filelist = os.listdir('polygon')
             for file in filelist:
-                if name == file.split('_')[0]:
+                if name == str(int(file.split('_')[0])):
                     img_np = cv2.imread('polygon/' + file, cv2.IMREAD_GRAYSCALE)
                     all_shape_np[i, 0, :, :] = img_np / 255
                     find = True
@@ -542,23 +331,16 @@ def data_pre_arbitrary(T_path):
             # calculate contrast
             all_ctrast_np[i, :] = np.concatenate((cal_contrast_vector(
                 all_spec_np[i, :29]), cal_contrast_vector(all_spec_np[i, 29:])))
-            # gauss curve fit
-            # try:
-            #     all_gauss_np[i, :] = np.concatenate(
-            #         (np.array(gauss10_curve_fit(all_spec_np[i, :29])), np.array(gauss10_curve_fit(all_spec_np[i, 29:]))))
-            # except:
-            #     print("Optimal parameters not found with " + str(i) + ", it will be deleted later!")
-            #     if find:
-            #         delete_list.append(i)
             t.update()
     # delete error guys
     all_name_np = np.delete(all_name_np, delete_list, axis=0)
     all_gap_np = np.delete(all_gap_np, delete_list, axis=0)
+    all_thk_np = np.delete(all_thk_np, delete_list, axis=0)
     all_spec_np = np.delete(all_spec_np, delete_list, axis=0)
     all_shape_np = np.delete(all_shape_np, delete_list, axis=0)
-    # all_gauss_np = np.delete(all_gauss_np, delete_list, axis=0)
     all_ctrast_np = np.delete(all_ctrast_np, delete_list, axis=0)
-    np.save('data/all_gap.npy', all_gap_np)
+    all_gatk_np = np.concatenate((all_gap_np, all_thk_np[:, 1]), axis=0)
+    np.save('data/all_gatk.npy', all_gatk_np)
     np.save('data/all_spec.npy', all_spec_np)
     np.save('data/all_shape.npy', all_shape_np)
     np.save('data/all_ctrast.npy', all_ctrast_np)
@@ -567,98 +349,26 @@ def data_pre_arbitrary(T_path):
 
 def data_enhancement():
     print("Waiting for Data Enhancement...")
-    all_gap_org = np.load('data/all_gap.npy')
+    all_gatk_org = np.load('data/all_gatk.npy')
     all_spec_org = np.load('data/all_spec.npy')
     all_shape_org = np.load('data/all_shape.npy')
     all_spec_90_270 = np.zeros_like(all_spec_org)
     all_shape_90, all_shape_270, all_shape_180 = np.zeros_like(
         all_shape_org), np.zeros_like(all_shape_org), np.zeros_like(all_shape_org)
-    with tqdm(total=all_gap_org.shape[0], ncols=70) as t:
-        for i in range(all_gap_org.shape[0]):
+    with tqdm(total=all_gatk_org.shape[0], ncols=70) as t:
+        for i in range(all_gatk_org.shape[0]):
             all_spec_90_270[i, :] = np.concatenate((all_spec_org[i, 29:], all_spec_org[i, :29]))
             all_shape_90[i, 0, :, :] = rotate_bound(all_shape_org[i, 0, :, :], 90)
             all_shape_180[i, 0, :, :] = rotate_bound(all_shape_org[i, 0, :, :], 180)
             all_shape_270[i, 0, :, :] = rotate_bound(all_shape_org[i, 0, :, :], 270)
             t.update()
-    all_gap_en = np.concatenate((all_gap_org, all_gap_org, all_gap_org, all_gap_org), axis=0)
+    all_gatk_en = np.concatenate((all_gatk_org, all_gatk_org, all_gatk_org, all_gatk_org), axis=0)
     all_spec_en = np.concatenate((all_spec_org, all_spec_90_270, all_spec_org, all_spec_90_270), axis=0)
     all_shape_en = np.concatenate((all_shape_org, all_shape_90, all_shape_180, all_shape_270), axis=0)
-    np.save('data/all_gap_en.npy', all_gap_en)
+    np.save('data/all_gatk_en.npy', all_gatk_en)
     np.save('data/all_spec_en.npy', all_spec_en)
     np.save('data/all_shape_en.npy', all_shape_en)
     print('Data Enhancement Done!')
-
-
-def mask(output_shapes, output_gaps):
-    batch_size = output_gaps.shape[0]
-    mask = torch.zeros_like(output_shapes).float()
-    for i in range(batch_size):
-        bound = int(output_shapes.shape[-1] // (int(output_gaps[i, 0] * 200 + 200) / 20) + 1)
-        mask[i, 0, bound:-bound, bound:-bound] = 1
-    output_shapes = output_shapes * mask
-    return output_shapes
-
-
-def center_comp(ori):
-    global mask
-    mask = torch.zeros_like(ori)
-    global search_or_not
-    search_or_not = torch.zeros_like(ori)
-    global img
-    img = ori
-
-    for i in range(img.shape[0]):
-        center_x, center_y = find_center(img[i, 0])
-        assert img[i, 0, center_x, center_y] > 0
-        mask[i, 0, center_x, center_y] = 1
-
-    for bs_no in range(img.shape[0]):
-        flag = search(bs_no, center_x, center_y)
-
-    return img * mask
-
-
-def search(bs_no, cor_x, cor_y):
-    if cor_x < 0 or cor_x >= img.shape[2] or cor_y < 0 or cor_y >= img.shape[3]:
-        return -1
-
-    if search_or_not[bs_no, 0, cor_x, cor_y] == 0:
-        search_or_not[bs_no, 0, cor_x, cor_y] = 1
-    else:
-        return -1
-
-    if img[bs_no, 0, cor_x, cor_y] == 1:
-        mask[bs_no, 0, cor_x, cor_y] = 1
-        flag_left = search(bs_no, cor_x - 1, cor_y)
-        flag_right = search(bs_no, cor_x + 1, cor_y)
-        flag_up = search(bs_no, cor_x, cor_y - 1)
-        flag_down = search(bs_no, cor_x, cor_y + 1)
-    else:
-        mask[bs_no, 0, cor_x, cor_y] = 0
-
-    return 0
-
-
-def find_center(img):
-    center_x = img.shape[0] // 2
-    center_y = img.shape[1] // 2
-    list_point = []
-    for i in range(img.shape[0]):
-        for j in range(img.shape[1]):
-            point = (abs(i - center_x) + abs(j - center_y), i, j)
-            list_point.append(point)
-    list_point.sort(key=takeFirst)
-    for i in list_point:
-        if img[i[1], i[2]] > 0:
-            center_x = i[1]
-            center_y = i[2]
-            break
-
-    return center_x, center_y
-
-
-def takeFirst(elem):
-    return elem[0]
 
 
 def binary(output_shapes_org):

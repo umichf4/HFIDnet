@@ -2,7 +2,7 @@
 # @Author: Brandon Han
 # @Date:   2019-09-03 11:44:56
 # @Last Modified by:   Brandon Han
-# @Last Modified time: 2019-09-06 00:24:53
+# @Last Modified time: 2019-09-14 17:42:12
 
 import cv2
 import numpy as np
@@ -64,11 +64,12 @@ class MetaShape(object):
         self.ctrX = width / 2
         self.ctrY = width / 2
         self.img = np.zeros((width, width), dtype=np.uint8)
+        self.ok = True
 
     def init_verts(self):
         self.aveRadius = random.uniform(width / 5, width / 3)
         self.irregularity = random.uniform(0, 0.9)
-        self.spikeyness = random.uniform(0, 0.4)
+        self.spikeyness = random.uniform(0, 0.3)
         self.numVerts = random.randint(3, 20)
         self.verts = generate_verts(self.ctrX, self.ctrY, self.aveRadius,
                                     self.irregularity, self.spikeyness, self.numVerts)
@@ -142,11 +143,9 @@ class MetaShape(object):
 
     def check_size(self):
         if np.sum(self.img) < self.width ** 2:
-            return False
-        else:
-            return True
+            self.ok = False
 
-    def generate_polygon(self, name):
+    def generate_polygon(self):
         self.init_verts()
         self.draw_polygon()
         self.fill_polygon()
@@ -154,15 +153,17 @@ class MetaShape(object):
         self.resize_polygon()
         self.pad_boundary()
         self.binary_polygon()
-        if self.check_size():
-            self.save_polygon(name)
-            # self.show_polygon()
+        self.check_size()
 
 
 if __name__ == '__main__':
-    times = 1000
-    begin = 5000
-    for i in range(begin, begin + times):
+    times = 5000
+    i = 0
+    while i < 5000:
         width = random.randint(200, 400)
+        thickness = random.randint(250, 450)
         polyogn = MetaShape(width)
-        polyogn.generate_polygon('polygon3/' + str(i) + '_' + str(width) + '.png')
+        polyogn.generate_polygon()
+        if polyogn.ok:
+            polyogn.save_polygon('polygon/' + str(i).zfill(4) + '_' + str(width) + '_' + str(thickness) + '.png')
+            i += 1

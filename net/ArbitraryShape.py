@@ -2,7 +2,7 @@
 # @Author: Brandon Han
 # @Date:   2019-09-04 14:27:09
 # @Last Modified by:   Brandon Han
-# @Last Modified time: 2019-09-11 20:58:44
+# @Last Modified time: 2019-09-14 20:05:52
 
 import os
 import sys
@@ -19,42 +19,11 @@ def normal_init(m, mean, std):
         m.bias.data.zero_()
 
 
-def get_gaussian_kernel(kernel_size=3, sigma=2, channels=1):
-    # Create a x, y coordinate grid of shape (kernel_size, kernel_size, 2)
-    x_coord = torch.arange(kernel_size)
-    x_grid = x_coord.repeat(kernel_size).view(kernel_size, kernel_size)
-    y_grid = x_grid.t()
-    xy_grid = torch.stack([x_grid, y_grid], dim=-1).float()
-
-    mean = (kernel_size - 1) / 2.
-    variance = sigma**2.
-
-    # Calculate the 2-dimensional gaussian kernel which is
-    # the product of two gaussian distributions for two different
-    # variables (in this case called x and y)
-    gaussian_kernel = (1. / (2. * math.pi * variance)) *\
-        torch.exp(
-        -torch.sum((xy_grid - mean)**2., dim=-1) /
-        (2 * variance)
-    )
-
-    # Make sure sum of values in gaussian kernel equals 1.
-    gaussian_kernel = gaussian_kernel / torch.sum(gaussian_kernel)
-
-    # Reshape to 2d depthwise convolutional weight
-    gaussian_kernel = gaussian_kernel.view(1, 1, kernel_size, kernel_size)
-    gaussian_kernel = gaussian_kernel.repeat(channels, 1, 1, 1)
-
-    return gaussian_kernel.requires_grad_(False)
-
-
 class GeneratorNet(nn.Module):
-    def __init__(self, noise_dim=100, ctrast_dim=58, d=32, kernel_size=5):
+    def __init__(self, noise_dim=100, ctrast_dim=58, d=32):
         super().__init__()
         self.noise_dim = noise_dim
         self.ctrast_dim = ctrast_dim
-        self.gaussian_kernel = get_gaussian_kernel(kernel_size)
-        self.pad = (kernel_size - 1) // 2
         self.deconv_block_ctrast = nn.Sequential(
             nn.ConvTranspose2d(self.ctrast_dim, d * 4, 4, 1, 0),
             nn.BatchNorm2d(d * 4),
@@ -98,7 +67,7 @@ class GeneratorNet(nn.Module):
             nn.LeakyReLU(0.2)
         )
         self.fc_block_2 = nn.Sequential(
-            nn.Linear(ctrast_dim, 1),
+            nn.Linear(ctrast_dim, 2),
             nn.Tanh()
         )
         self.short_cut = nn.Sequential(
@@ -113,10 +82,9 @@ class GeneratorNet(nn.Module):
         ctrast = self.deconv_block_ctrast(ctrast_in.view(-1, self.ctrast_dim, 1, 1))
         net = torch.cat((noise, ctrast), 1)
         img = self.deconv_block_cat(net)
-        # img = F.conv2d(img, self.gaussian_kernel, padding=self.pad)
-        gap_in = self.fc_block_1(img.view(img.size(0), -1)) + self.short_cut(ctrast_in.view(ctrast_in.size(0), -1))
-        gap = self.fc_block_2(gap_in)
-        return (img + 1) / 2, (gap + 1) / 2
+        pair_in = self.fc_block_1(img.view(img.size(0), -1)) + self.short_cut(ctrast_in.view(ctrast_in.size(0), -1))
+        pair = self.fc_block_2(pair_in)
+        return (img + 1) / 2, (pair + 1) / 2
 
 
 class SimulatorNet(nn.Module):
@@ -128,10 +96,10 @@ class SimulatorNet(nn.Module):
             nn.Conv2d(1, 3 * d // 4, 4, 2, 1),
             nn.LeakyReLU(0.2)
         )
-        self.conv_block_gap = nn.Sequential(
+        self.conv_block_gatk = nn.Sequential(
             # ------------------------------------------------------
             nn.ReplicationPad2d((63, 0, 63, 0)),
-            nn.Conv2d(1, d // 4, 4, 2, 1),
+            nn.Conv2d(1, d // 8, 4, 2, 1),
             nn.LeakyReLU(0.2)
         )
         self.conv_block_cat = nn.Sequential(
@@ -172,10 +140,11 @@ class SimulatorNet(nn.Module):
         for m in self._modules:
             normal_init(self._modules[m], mean, std)
 
-    def forward(self, shape_in, gap_in):
+    def forward(self, shape_in, gap_in, thk_in):
         shape = self.conv_block_shape(shape_in)
-        gap = self.conv_block_gap(gap_in.view(-1, 1, 1, 1))
-        net = torch.cat((shape, gap), 1)
+        gap = self.conv_block_gatk(gap_in.view(-1, 1, 1, 1))
+        thk = self.conv_block_gatk(thk_in.view(-1, 1, 1, 1))
+        net = torch.cat((shape, gap, thk), 1)
         spec = self.conv_block_cat(net)
         spec = self.fc_block(spec.view(spec.shape[0], -1))
         return (spec + 1) / 2
@@ -184,16 +153,16 @@ class SimulatorNet(nn.Module):
 if __name__ == '__main__':
     import torchsummary
 
-    if torch.cuda.is_available():
-        generator = GeneratorNet().cuda()
-    else:
-        generator = GeneratorNet()
-
-    torchsummary.summary(generator, [tuple([100]), tuple([58])])
-
     # if torch.cuda.is_available():
-    #     simulator = SimulatorNet().cuda()
+    #     generator = GeneratorNet().cuda()
     # else:
-    #     simulator = SimulatorNet()
+    #     generator = GeneratorNet()
 
-    # torchsummary.summary(simulator, [(1, 64, 64), tuple([1])])
+    # torchsummary.summary(generator, [tuple([100]), tuple([58])])
+
+    if torch.cuda.is_available():
+        simulator = SimulatorNet().cuda()
+    else:
+        simulator = SimulatorNet()
+
+    torchsummary.summary(simulator, [(1, 64, 64), tuple([1]), tuple([1])])
