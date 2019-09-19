@@ -2,7 +2,7 @@
 # @Author: Brandon Han
 # @Date:   2019-08-17 15:20:26
 # @Last Modified by:   Brandon Han
-# @Last Modified time: 2019-09-14 20:45:05
+# @Last Modified time: 2019-09-16 19:45:20
 import torch
 import os
 import json
@@ -277,23 +277,45 @@ def cal_contrast_vector(spec):
 
 
 def plot_possible_spec(spec):
-    min_index = np.argmin(spec, axis=1)
-    min_sort = np.argsort(min_index)
-    TE_spec = spec[min_sort, :]
+    # import copy
+    # temp = copy.copy(spec)
+    # min_index_1 = np.argmin(temp, axis=1)
+    # temp[min_index_1] = 2
+    # min_index_2 = np.argmin(temp, axis=1)
+    # temp[min_index_2] = 2
+    # min_index_3 = np.argmin(temp, axis=1)
+    # temp[min_index_3] = 2
+    # min_index_4 = np.argmin(temp, axis=1)
+    # temp[min_index_4] = 2
+    # min_index_5 = np.argmin(temp, axis=1)
+    # temp[min_index_5] = 2
+    # min_index_6 = np.argmin(temp, axis=1)
+    # min_sort = np.lexsort((min_index_6, min_index_5, min_index_4, min_index_3, min_index_2, min_index_1))
+    # TE_spec = spec[min_sort, :]
+    # max_index = np.argmax(spec, axis=1)
+    # min_index = np.argmin(spec, axis=1)
+    # sort = np.lexsort((max_index[::-1], min_index))
+    # TE_spec = spec[sort, :]
+    mean = np.mean(spec, axis=1)
+    min_index_0 = np.argsort(mean)
+    min_index_1 = np.argmin(spec[:, 15:], axis=1)
+    sort = np.lexsort((min_index_0, min_index_1))
+    TE_spec = spec[sort, :]
+
     wavelength = np.linspace(400, 680, 29)
-    # TE_spec = cv2.resize(src=TE_spec, dsize=(1000, 1881), interpolation=cv2.INTER_CUBIC)
+    TE_spec = cv2.resize(src=TE_spec, dsize=(1000, 1881), interpolation=cv2.INTER_CUBIC)
 
     plt.figure()
     plt.pcolor(TE_spec, cmap=plt.cm.jet)
     plt.xlabel('Wavelength (nm)')
     # plt.xlabel('Index of elements')
     plt.ylabel('Index of Devices')
-    plt.title('Possible Contrast Distribution (TM)')
+    plt.title('Possible Contrast Distribution (TE)')
     # plt.title('Gaussian Amplitude after Decomposition')
     # plt.title('Possible Spectrums of Arbitrary Shapes (' + title + ')')
     # plt.title(r'Possible Spectrums of Square Shape ($T_iO_2$)')
-    # plt.xticks(np.arange(len(wavelength), step=4), np.uint16(wavelength[::4]))
-    plt.xticks(np.arange(8), np.uint16(wavelength[::4]))
+    plt.xticks(np.arange(len(wavelength), step=4), np.uint16(wavelength[::4]))
+    # plt.xticks(np.arange(8), np.uint16(wavelength[::4]))
     plt.yticks([])
     cb = plt.colorbar()
     cb.ax.set_ylabel('Contrast')
@@ -380,4 +402,5 @@ def binary(output_shapes_org):
 
 
 if __name__ == '__main__':
-    rename_all_files('results')
+    _, spec = load_mat('data/shape_spec_5000.mat')
+    plot_possible_spec(spec[:, 32:])

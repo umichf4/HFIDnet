@@ -6,7 +6,7 @@ files = files(3:end);
 N = numel(files);
 shape_spec = [];
 acc = 5;
-for i = 1:1:1000
+for i = 1555:1:2000
     if files(i).name(1) ~= '.'
         tic
         img_path = strcat(directory,files(i).name);
