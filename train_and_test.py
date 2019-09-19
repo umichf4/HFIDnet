@@ -27,8 +27,8 @@ def train_generator(params):
     torch.set_default_tensor_type(torch.cuda.FloatTensor if params.cuda else torch.FloatTensor)
     # type_tensor = torch.cuda.FloatTensor if params.cuda else torch.FloatTensor
     # Device configuration
-    # device = torch.device('cuda:0' if params.cuda else 'cpu')
-    device = torch.device('cpu')
+    device = torch.device('cuda:0' if params.cuda else 'cpu')
+    # device = torch.device('cpu')
     print('Training GeneratorNet starts, using %s' % (device))
 
     # Visualization configuration
@@ -207,8 +207,8 @@ def test_generator(params):
     eng.addpath(eng.genpath('matlab'))
     eng.addpath(eng.genpath('solvers'))
     # Device configuration
-    # device = torch.device('cuda:0' if params.cuda else 'cpu')
-    device = torch.device('cpu')
+    device = torch.device('cuda:0' if params.cuda else 'cpu')
+    # device = torch.device('cpu')
     print('Test starts, using %s' % (device))
 
     # Visualization configuration
@@ -261,8 +261,8 @@ def train_simulator(params):
     torch.set_default_tensor_type(torch.cuda.FloatTensor if params.cuda else torch.FloatTensor)
     # type_tensor = torch.cuda.FloatTensor if params.cuda else torch.FloatTensor
     # Device configuration
-    # device = torch.device('cuda:0' if params.cuda else 'cpu')
-    device = torch.device('cpu')
+    device = torch.device('cuda:0' if params.cuda else 'cpu')
+    # device = torch.device('cpu')
     print('Training SimulatorNet starts, using %s' % (device))
 
     # Visualization configuration
@@ -405,8 +405,8 @@ def test_simulator(params):
     eng.addpath(eng.genpath('matlab'))
     eng.addpath(eng.genpath('solvers'))
     # Device configuration
-    # device = torch.device('cuda:0' if params.cuda else 'cpu')
-    device = torch.device('cpu')
+    device = torch.device('cuda:0' if params.cuda else 'cpu')
+    # device = torch.device('cpu')
     print('Test starts, using %s' % (device))
 
     # Visualization configuration
