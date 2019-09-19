@@ -361,7 +361,8 @@ def data_pre_arbitrary(T_path):
     all_spec_np = np.delete(all_spec_np, delete_list, axis=0)
     all_shape_np = np.delete(all_shape_np, delete_list, axis=0)
     all_ctrast_np = np.delete(all_ctrast_np, delete_list, axis=0)
-    all_gatk_np = np.concatenate((all_gap_np, all_thk_np[:, 1]), axis=0)
+    all_gatk_np = [[all_gap_np[index], all_thk_np[index]] for index in range(all_gap_np.shape[0])]
+    all_gatk_np = np.array(all_gatk_np)
     np.save('data/all_gatk.npy', all_gatk_np)
     np.save('data/all_spec.npy', all_spec_np)
     np.save('data/all_shape.npy', all_shape_np)

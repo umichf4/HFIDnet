@@ -27,7 +27,8 @@ def train_generator(params):
     torch.set_default_tensor_type(torch.cuda.FloatTensor if params.cuda else torch.FloatTensor)
     # type_tensor = torch.cuda.FloatTensor if params.cuda else torch.FloatTensor
     # Device configuration
-    device = torch.device('cuda:0' if params.cuda else 'cpu')
+    # device = torch.device('cuda:0' if params.cuda else 'cpu')
+    device = torch.device('cpu')
     print('Training GeneratorNet starts, using %s' % (device))
 
     # Visualization configuration
@@ -53,7 +54,7 @@ def train_generator(params):
     all_shape = torch.from_numpy(np.load('data/all_shape.npy')).float()
     all_ctrast = torch.from_numpy(np.load('data/all_ctrast.npy')).float()
 
-    all_num = all_gap.shape[0]
+    all_num = 5000
     permutation = np.random.permutation(all_num).tolist()
     all_gatk, all_spec, all_shape, all_ctrast = all_gatk[permutation],\
         all_spec[permutation, :], all_shape[permutation, :, :, :], all_ctrast[permutation, :]
@@ -84,7 +85,7 @@ def train_generator(params):
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, params.step_size_g, params.gamma_g)
 
     simulator = SimulatorNet(spec_dim=params.spec_dim, d=params.net_depth)
-    load_checkpoint('models/simulator_full_trained.pth', simulator, None)
+    # load_checkpoint('models/simulator_full_trained.pth', simulator, None)
     for param in simulator.parameters():
         param.requires_grad = False
 
@@ -206,7 +207,8 @@ def test_generator(params):
     eng.addpath(eng.genpath('matlab'))
     eng.addpath(eng.genpath('solvers'))
     # Device configuration
-    device = torch.device('cuda:0' if params.cuda else 'cpu')
+    # device = torch.device('cuda:0' if params.cuda else 'cpu')
+    device = torch.device('cpu')
     print('Test starts, using %s' % (device))
 
     # Visualization configuration
@@ -259,7 +261,8 @@ def train_simulator(params):
     torch.set_default_tensor_type(torch.cuda.FloatTensor if params.cuda else torch.FloatTensor)
     # type_tensor = torch.cuda.FloatTensor if params.cuda else torch.FloatTensor
     # Device configuration
-    device = torch.device('cuda:0' if params.cuda else 'cpu')
+    # device = torch.device('cuda:0' if params.cuda else 'cpu')
+    device = torch.device('cpu')
     print('Training SimulatorNet starts, using %s' % (device))
 
     # Visualization configuration
@@ -286,15 +289,14 @@ def train_simulator(params):
     all_gatk = torch.from_numpy(np.load('data/all_gatk_en.npy')).float()
     all_spec = torch.from_numpy(np.load('data/all_spec_en.npy')).float()
     all_shape = torch.from_numpy(np.load('data/all_shape_en.npy')).float()
-    all_ctrast = torch.from_numpy(np.load('data/all_ctrast_en.npy')).float()
 
-    all_num = all_gap.shape[0]
+    all_num = all_gatk.shape[0]
     permutation = np.random.permutation(all_num).tolist()
-    all_gatk, all_spec, all_shape, all_ctrast = all_gatk[permutation],\
-        all_spec[permutation, :], all_shape[permutation, :, :, :], all_ctrast[permutation, :]
+    all_gatk, all_spec, all_shape = all_gatk[permutation],\
+        all_spec[permutation, :], all_shape[permutation, :, :, :]
 
-    train_gatk = all_gap[:int(all_num * params.ratio), :]
-    valid_gatk = all_gap[int(all_num * params.ratio):, :]
+    train_gatk = all_gatk[:int(all_num * params.ratio), :]
+    valid_gatk = all_gatk[int(all_num * params.ratio):, :]
 
     train_spec = all_spec[:int(all_num * params.ratio), :]
     valid_spec = all_spec[int(all_num * params.ratio):, :]
@@ -306,7 +308,7 @@ def train_simulator(params):
     train_loader = DataLoader(dataset=train_dataset, batch_size=params.batch_size_s, shuffle=True)
 
     valid_dataset = TensorDataset(valid_spec, valid_shape, valid_gatk)
-    valid_loader = DataLoader(dataset=valid_dataset, batch_size=valid_gap.shape[0], shuffle=True)
+    valid_loader = DataLoader(dataset=valid_dataset, batch_size=valid_gatk.shape[0], shuffle=True)
 
     # Net configuration
     net = SimulatorNet(spec_dim=params.spec_dim, d=params.net_depth)
@@ -403,7 +405,8 @@ def test_simulator(params):
     eng.addpath(eng.genpath('matlab'))
     eng.addpath(eng.genpath('solvers'))
     # Device configuration
-    device = torch.device('cuda:0' if params.cuda else 'cpu')
+    # device = torch.device('cuda:0' if params.cuda else 'cpu')
+    device = torch.device('cpu')
     print('Test starts, using %s' % (device))
 
     # Visualization configuration
