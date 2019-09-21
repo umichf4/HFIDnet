@@ -2,7 +2,7 @@
 # @Author: Brandon Han
 # @Date:   2019-08-17 15:20:26
 # @Last Modified by:   Brandon Han
-# @Last Modified time: 2019-09-16 19:45:20
+# @Last Modified time: 2019-09-21 13:39:35
 import torch
 import os
 import json
@@ -21,6 +21,17 @@ warnings.filterwarnings('ignore')
 
 current_dir = os.path.abspath(os.path.dirname(__file__))
 Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
+
+
+class BiBinaryloss(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        right = x[:, 0, :, :].masked_fill((x[:, 0, :, :] < 0.5), 1)
+        left = x[:, 0, :, :].masked_fill((x[:, 0, :, :] >= 0.5), 0)
+        res = torch.mean(1 - right + left)
+        return res
 
 
 class Params():
