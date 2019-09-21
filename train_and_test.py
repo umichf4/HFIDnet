@@ -2,7 +2,7 @@
 # @Author: Brandon Han
 # @Date:   2019-08-17 15:20:26
 # @Last Modified by:   Brandon Han
-# @Last Modified time: 2019-09-21 13:57:38
+# @Last Modified time: 2019-09-21 14:56:23
 
 import torch
 import torch.nn as nn
@@ -15,7 +15,7 @@ import sys
 current_dir = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(current_dir)
 from torch.utils.data import DataLoader, TensorDataset
-from net.ArbitraryShape import GeneratorNet, SimulatorNet
+from net.ArbitraryShape_2 import GeneratorNet, SimulatorNet
 from utils import *
 from tqdm import tqdm
 import cv2
