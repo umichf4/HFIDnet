@@ -2,7 +2,7 @@
 # @Author: Brandon Han
 # @Date:   2019-08-17 15:20:26
 # @Last Modified by:   Brandon Han
-# @Last Modified time: 2019-09-21 13:39:35
+# @Last Modified time: 2019-09-21 14:14:28
 import torch
 import os
 import json
@@ -339,7 +339,7 @@ def data_pre_arbitrary(T_path):
     all_num = TT_array.shape[0]
     all_name_np = TT_array[:, 0]
     all_gap_np = (TT_array[:, 1] - 200) / 200
-    all_thk_np = (TT_array[:, 2] - 200) / 250
+    all_thk_np = (TT_array[:, 2] - 250) / 200
     all_spec_np = TT_array[:, 3:]
     all_shape_np = np.zeros((all_num, 1, 64, 64))
     all_ctrast_np = np.zeros((all_num, 14))

@@ -2,7 +2,7 @@
 # @Author: Brandon Han
 # @Date:   2019-08-17 15:20:26
 # @Last Modified by:   Brandon Han
-# @Last Modified time: 2019-09-14 20:34:02
+# @Last Modified time: 2019-09-21 13:57:38
 
 import torch
 import torch.nn as nn
@@ -85,7 +85,7 @@ def train_generator(params):
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, params.step_size_g, params.gamma_g)
 
     simulator = SimulatorNet(spec_dim=params.spec_dim, d=params.net_depth)
-    # load_checkpoint('models/simulator_full_trained.pth', simulator, None)
+    load_checkpoint('models/simulator_full_trained.pth', simulator, None)
     for param in simulator.parameters():
         param.requires_grad = False
 
@@ -145,12 +145,12 @@ def train_generator(params):
                 binary_loss = criterion_3(output_shapes)
                 shape_loss = 1 - criterion_2(output_shapes, labels)
                 # output_shapes = binary(output_shapes)
-                output_specs = simulator(output_shapes, output_pairs)
+                output_specs = simulator(output_shapes, output_pairs[:, 0], output_pairs[:, 1])
                 spec_loss = criterion_1(output_specs, inputs)
                 val_loss += spec_loss + shape_loss * params.alpha + binary_loss * params.beta
 
         val_loss /= (i + 1)
-        # val_loss_list.append(val_loss)
+        val_loss_list.append(val_loss)
         # with torch.no_grad():
         #     desire = [1, 1, 0.4, 0.1, 0.4, 1, 1, 1, 1, 0.4, 0.1, 0.4, 1, 1]
         #     ctrast = np.array(desire)
